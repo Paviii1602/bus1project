@@ -10,16 +10,13 @@ root.render(
   </React.StrictMode>
 );
 
-// ─── Register Service Worker for PWA ────────────────────────────────────────
+/* 
+// ─── Register Service Worker removed because service-worker.js is missing
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('/service-worker.js')
-      .then((reg) => {
-        console.log('[NavBus] Service Worker registered:', reg.scope);
-      })
-      .catch((err) => {
-        console.warn('[NavBus] Service Worker registration failed:', err);
-      });
+      .catch(() => {});
   });
-}
+} 
+*/

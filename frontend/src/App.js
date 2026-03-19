@@ -426,7 +426,9 @@ function SearchResultScreen({ fromStop, toStop, onBack, onBusSelect, userLocatio
     const stops = result.stops || [];
     if (stops.length === 0) return;
 
-    const center = { lat: stops[0].latitude, lng: stops[0].longitude };
+    // Clear old markers + polyline
+    if (!window.google?.maps?.Map) return;
+    
     if (!mapInst.current) {
       mapInst.current = new window.google.maps.Map(mapRef.current, {
         center, zoom: 14,
@@ -735,7 +737,7 @@ const HomeScreen = ({ routes, buses, user, cityName, onRouteSelect, onBusSelect,
 
   // Draw active buses on home map
   useEffect(() => {
-    if (!mapsLoaded || !mapRef.current) return;
+    if (!mapsLoaded || !mapRef.current || !window.google?.maps?.Map) return;
     if (!mapInst.current) {
       mapInst.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: 12.93, lng: 79.13 }, zoom: 13,
@@ -1164,7 +1166,7 @@ function BusTrackingScreen({ busId, onBack, userLocation, selectedRouteId, searc
   }, [fetchData]);
 
   useEffect(() => {
-    if (!mapsLoaded || !busData || !mapRef.current) return;
+    if (!mapsLoaded || !busData || !mapRef.current || !window.google?.maps?.Map) return;
     const center = busData.position
       ? { lat: busData.position.latitude, lng: busData.position.longitude }
       : { lat: 12.92, lng: 79.13 };
@@ -1697,7 +1699,7 @@ function DriverDashboard({ user, onBack, onProfileClick, onLogout }) {
   };
 
   useEffect(() => {
-    if (!mapsLoaded || !mapRef.current) return;
+    if (!mapsLoaded || !mapRef.current || !window.google?.maps?.Map) return;
     if (!mapInstance.current) {
       mapInstance.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: 12.92, lng: 79.13 }, zoom: 14,
