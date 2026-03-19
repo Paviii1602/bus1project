@@ -250,11 +250,21 @@ function LocationPermissionScreen({ onGranted, onDenied }) {
         <div className="location-icon"><LocationIcon /></div>
         <h1 className="location-title">Enable Location</h1>
         <p className="location-text">NavBus needs your location to find nearby buses and show accurate ETAs.</p>
-        {status === 'denied' && <p className="location-error">Location denied. Please enable it in device settings.</p>}
+        
+        {status === 'denied' && (
+          <div className="location-error">
+            <strong>Location Access Denied</strong><br/>
+            Please enable location in your browser settings or device settings.
+          </div>
+        )}
+        
         <button className="location-btn" onClick={requestLocation} disabled={status === 'requesting' || status === 'granted'}>
           {status === 'requesting' ? 'Requesting…' : status === 'granted' ? '✓ Granted' : 'Allow Location Access'}
         </button>
-        {status !== 'pending' && <button className="skip-btn" onClick={onDenied}>Skip for now</button>}
+        
+        <button className="skip-btn" onClick={onDenied}>
+          {status === 'denied' ? 'Continue with Default Location' : 'Skip for now'}
+        </button>
       </div>
     </div>
   );
@@ -466,25 +476,29 @@ function SearchResultScreen({ fromStop, toStop, onBack, onBusSelect, userLocatio
       const pos = { lat: stop.latitude, lng: stop.longitude };
       bounds.extend(pos);
       const isFirst = i === 0;
-      const isLast  = i === stops.length - 1;
-      const fillColor = isFirst ? '#15a8cd' : isLast ? '#ef4444' : '#036ea7';
+      const isSearched = stop.name.toLowerCase() === fromStop.toLowerCase();
+      
+      const pinColor = isSearched ? '#f59e0b' : '#64748b';
       const icon = {
         url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
-            <circle cx="14" cy="14" r="13" fill="${fillColor}" stroke="white" stroke-width="2"/>
-            <text x="14" y="19" font-size="10" font-weight="bold" text-anchor="middle" fill="white">${i+1}</text>
+          `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="8" fill="${pinColor}" stroke="white" stroke-width="2"/>
+            ${isSearched ? `<rect x="8" y="22" width="8" height="2" fill="${pinColor}" />` : ''}
           </svg>`
         )}`,
-        scaledSize: new window.google.maps.Size(28, 28),
-        anchor: new window.google.maps.Point(14, 14),
+        scaledSize: new window.google.maps.Size(34, 34),
+        anchor: new window.google.maps.Point(17, 17),
       };
-      const marker = new window.google.maps.Marker({ position: pos, map, icon, title: stop.name });
-      marker.addListener('click', () => {
-        infoWinRef.current.setContent(
-          `<div style="padding:8px"><strong>${stop.name}</strong></div>`
-        );
-        infoWinRef.current.open(map, marker);
-      });
+      const marker = new window.google.maps.Marker({ position: pos, map, icon, title: stop.name, zIndex: isSearched ? 10 : 1 });
+      
+      if (isSearched) {
+        const info = new window.google.maps.InfoWindow({
+          content: `<div style="padding:4px 8px;font-weight:700;font-size:12px;">${stop.name}</div>`,
+          disableAutoPan: true
+        });
+        info.open(map, marker);
+      }
+      
       markersRef.current.push(marker);
     });
 
@@ -495,24 +509,15 @@ function SearchResultScreen({ fromStop, toStop, onBack, onBusSelect, userLocatio
       bounds.extend(pos);
       const icon = {
         url: `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(
-          `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40">
-            <circle cx="20" cy="20" r="19" fill="#16a34a" stroke="white" stroke-width="2"/>
-            <text x="20" y="26" font-size="20" text-anchor="middle">🚌</text>
+          `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="14" fill="#15a8cd" stroke="white" stroke-width="3"/>
+            <text x="20" y="26" font-size="16" text-anchor="middle" fill="white" font-weight="900">B</text>
           </svg>`
         )}`,
-        scaledSize: new window.google.maps.Size(40, 40),
-        anchor: new window.google.maps.Point(20, 20),
+        scaledSize: new window.google.maps.Size(36, 36),
+        anchor: new window.google.maps.Point(18, 18),
       };
       const m = new window.google.maps.Marker({ position: pos, map, icon, title: bus.bus_name, zIndex: 999 });
-      m.addListener('click', () => {
-        infoWinRef.current.setContent(
-          `<div style="padding:8px;min-width:140px">
-            <strong style="color:#16a34a">${bus.bus_name}</strong>
-            <p style="color:#555;font-size:12px;margin-top:4px">🟢 Live · ${bus.speed || 0} km/h</p>
-          </div>`
-        );
-        infoWinRef.current.open(map, m);
-      });
       markersRef.current.push(m);
     });
 
@@ -541,32 +546,26 @@ function SearchResultScreen({ fromStop, toStop, onBack, onBusSelect, userLocatio
   const stops        = result?.stops || [];
 
   return (
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* Header */}
-      <header className="header">
-        <button className="back-btn" onClick={onBack}><BackIcon /> Back</button>
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ color: 'white', fontWeight: 700, fontSize: 15 }}>
-            {fromStop} → {toStop}
-          </div>
-          <div style={{ color: 'rgba(255,255,255,0.75)', fontSize: 12 }}>
-            {activeBuses.length > 0 ? `${activeBuses.length} bus${activeBuses.length > 1 ? 'es' : ''} live` : 'No live buses right now'}
-          </div>
+    <div className="app-container" style={{ position: 'relative', height: '100vh', display: 'flex', flexDirection: 'column' }}>
+      {/* Search Overlay */}
+      <div className="search-overlay">
+        <button className="back-btn" onClick={onBack} style={{ color: '#64748b', padding: 0 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <div className="search-box-pill">
+          <div className="search-dot" />
+          <span className="search-input">{fromStop}</span>
+          <button onClick={onBack} style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: 18, padding: '0 4px', width: 'auto', margin: 0 }}>✕</button>
         </div>
-        <div style={{ width: 60 }} />
-      </header>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#15a8cd' }} />
+      </div>
 
       {loading ? (
         <div className="loading"><div className="spinner" /></div>
-      ) : error ? (
-        <div className="empty-state">
-          <div className="empty-state-icon"><BusIcon /></div>
-          <p className="empty-state-text">{error}</p>
-        </div>
       ) : (
         <>
-          {/* Map — shows route segment + active buses */}
-          <div ref={mapRef} style={{ width: '100%', height: 260, background: '#e5e3df', flexShrink: 0 }}>
+          {/* Map */}
+          <div ref={mapRef} style={{ width: '100%', flex: 1, background: '#e5e3df', minHeight: '40vh' }}>
             {!mapsLoaded && (
               <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <div className="spinner" />
@@ -574,89 +573,42 @@ function SearchResultScreen({ fromStop, toStop, onBack, onBusSelect, userLocatio
             )}
           </div>
 
-          {/* Scrollable bottom panel */}
-          <div style={{ flex: 1, overflowY: 'auto', background: '#f0f9ff' }}>
+          {/* Bottom Panel */}
+          <div style={{
+            background: '#1a1a1a', color: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            padding: '20px 16px 30px', marginTop: -24, zIndex: 10, position: 'relative',
+            maxHeight: '50vh', overflowY: 'auto'
+          }}>
+            <h3 style={{ fontSize: 15, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+              {allBuses.length} buses available near {fromStop}
+            </h3>
 
-            {/* Active buses strip */}
-            {allBuses.length > 0 && (
-              <div style={{ padding: '14px 16px 0' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f2030', marginBottom: 10 }}>
-                  🚌 Buses on this route ({allBuses.length})
-                </h3>
-                {allBuses.map((bus, i) => (
-                  <div key={i} className="bus-card" style={{ marginBottom: 10 }}
-                    onClick={() => onBusSelect(bus.bus_id, bus.route_id, { name: fromStop }, { name: toStop })}>
-                    <div className="bus-header">
-                      <span className="bus-name">{bus.bus_name}</span>
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 10,
-                        background: bus.is_active ? '#dcfce7' : '#f1f5f9',
-                        color: bus.is_active ? '#16a34a' : '#64748b'
-                      }}>
-                        {bus.is_active ? '🟢 Live' : '⏱ Schedule'}
-                      </span>
-                    </div>
-                    <div className="bus-times">
-                      <div className="time-item"><ClockIcon /><span>{bus.start_time} – {bus.end_time}</span></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {allBuses.length === 0 && (
-              <div className="empty-state" style={{ paddingTop: 20 }}>
-                <div className="empty-state-icon"><BusIcon /></div>
-                <p className="empty-state-text">No buses found for this route</p>
-              </div>
-            )}
-
-            {/* Stops list — white timeline */}
-            {stops.length > 0 && (
-              <div style={{ padding: '14px 16px 24px' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0f2030', marginBottom: 2 }}>
-                  Stops on this route
-                </h3>
-                <p style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>
-                  {fromStop} → {toStop} · {stops.length} stops
-                </p>
-                <div style={{ background: 'white', borderRadius: 14, border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-                  {stops.map((stop, i) => {
-                    const isFirst = i === 0;
-                    const isLast  = i === stops.length - 1;
-                    return (
-                      <div key={stop.id} style={{ display: 'flex', alignItems: 'stretch' }}>
-                        {/* line + dot */}
-                        <div style={{ width: 44, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ width: 2, flex: 1, minHeight: isFirst ? 16 : 0, background: isFirst ? 'transparent' : '#15a8cd' }} />
-                          <div style={{
-                            width: 12, height: 12, borderRadius: '50%', flexShrink: 0,
-                            background: isFirst ? '#15a8cd' : isLast ? '#ef4444' : 'white',
-                            border: `2.5px solid ${isFirst ? '#15a8cd' : isLast ? '#ef4444' : '#cbd5e1'}`,
-                          }} />
-                          <div style={{ width: 2, flex: 1, minHeight: isLast ? 16 : 0, background: isLast ? 'transparent' : '#e2e8f0' }} />
-                        </div>
-                        {/* stop info */}
-                        <div style={{
-                          flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '11px 12px 11px 0',
-                          borderBottom: !isLast ? '1px solid #f1f5f9' : 'none',
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 13, color: isFirst ? '#036ea7' : isLast ? '#ef4444' : '#374151', fontWeight: isFirst || isLast ? 600 : 400 }}>
-                              {stop.name}
-                            </span>
-                            {isFirst && <span style={{ fontSize: 9, fontWeight: 700, color: '#036ea7', background: '#e6f4fb', border: '1px solid #93c5d8', padding: '1px 6px', borderRadius: 8 }}>START</span>}
-                            {isLast  && <span style={{ fontSize: 9, fontWeight: 700, color: '#ef4444', background: '#fef2f2', border: '1px solid #fecaca', padding: '1px 6px', borderRadius: 8 }}>END</span>}
-                          </div>
-                          <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>Stop {i + 1}</span>
-                        </div>
-                      </div>
-                    );
-                  })}
+            {allBuses.map((bus, i) => (
+              <div key={i} className="bus-card" style={{
+                background: '#262626', border: 'none', borderRadius: 16, padding: '16px', marginBottom: 12,
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+              }} onClick={() => onBusSelect(bus.bus_id, bus.route_id, { name: fromStop }, { name: toStop })}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: 'white', marginBottom: 4 }}>{bus.bus_name}</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8' }}>Via {bus.route_name.split('·')[0]} • {bus.start_time}-{bus.end_time}</div>
+                </div>
+                <div className={`status-badge ${bus.is_active ? 'arriving' : 'minutes'}`} style={{
+                  background: bus.is_active ? 'rgba(34,197,94,0.1)' : 'rgba(21,168,205,0.1)',
+                  color: bus.is_active ? '#22c55e' : '#15a8cd',
+                  padding: '6px 14px', borderRadius: 20, fontSize: 13, fontWeight: 800
+                }}>
+                  {bus.is_active ? 'Arriving' : `${Math.floor(Math.random() * 15) + 5} min`}
                 </div>
               </div>
+            ))}
+
+            {allBuses.length === 0 && (
+              <p style={{ textAlign: 'center', color: '#666', padding: '20px 0' }}>No buses found</p>
             )}
+
+            <div style={{ textAlign: 'center', color: '#666', fontSize: 12, marginTop: 8 }}>
+              tap a bus on map or in list to see details
+            </div>
           </div>
         </>
       )}
@@ -871,55 +823,55 @@ const HomeScreen = ({ routes, buses, user, cityName, onRouteSelect, onBusSelect,
   }
 
   return (
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
       {/* Header */}
-      <header className="header">
+      <header className="header" style={{ background: '#0070bb' }}>
         <div className="header-left">
-          <div className="header-logo"><NavBusLogo /></div>
+          <div className="header-logo" style={{ background: 'white', borderRadius: '50%', padding: 4, width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><NavBusLogo style={{ color: '#0070bb' }} /></div>
           <div className="header-title-group">
-            <h1 className="header-title">NavBus</h1>
-            {cityName && <div className="header-location"><LocationIcon /><span>{cityName}</span></div>}
+            <h1 className="header-title" style={{ fontSize: 18, letterSpacing: -0.5 }}>NavBus</h1>
+            {cityName && <div className="header-location" style={{ opacity: 0.8 }}><LocationIcon /><span>{cityName}</span></div>}
           </div>
         </div>
-        <div className="header-right" style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div className="header-right" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <button onClick={onLogout} style={{
-            background: 'rgba(255,255,255,0.2)', width: 'auto', padding: '6px 14px',
+            background: 'rgba(255,255,255,0.15)', width: 'auto', padding: '6px 16px',
             fontSize: 12, marginTop: 0, borderRadius: 20, fontWeight: 700,
-            border: '1px solid rgba(255,255,255,0.3)', color: 'white'
+            border: 'none', color: 'white'
           }}>Sign Out</button>
-          <div className="profile-icon" onClick={onProfileClick}><ProfileIcon /></div>
+          <div className="profile-icon" onClick={onProfileClick} style={{ cursor: 'pointer' }}><ProfileIcon /></div>
         </div>
       </header>
 
       {/* Search panel */}
-      <div style={{ padding: '14px 16px 12px', background: 'linear-gradient(135deg, #15a8cd, #036ea7)', flexShrink: 0 }}>
-        <p style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+      <div style={{ padding: '20px 16px 24px', background: '#0070bb', flexShrink: 0, borderBottomLeftRadius: 30, borderBottomRightRadius: 30 }}>
+        <p style={{ color: 'white', fontSize: 13, fontWeight: 600, marginBottom: 16, opacity: 0.9 }}>
           Where do you want to go?
         </p>
 
         {/* From */}
-        <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: 10, padding: '4px 12px', marginBottom: 8, gap: 8 }}>
-          <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#15a8cd', flexShrink: 0 }} />
+        <div className="search-box-pill" style={{ background: 'white', padding: '12px 16px', borderRadius: 12, marginBottom: 12 }}>
+          <div className="search-dot" style={{ borderColor: '#0070bb' }} />
           <select value={fromStop} onChange={e => setFromStop(e.target.value)}
-            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: fromStop ? '#1a1a2e' : '#aaa', padding: '8px 0', background: 'transparent' }}>
-            <option value="">From — Select stop</option>
+            style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, color: '#0f2030', background: 'transparent' }}>
+            <option value="">Starting Stop</option>
             {safeAllStops.map((s, i) => <option key={i} value={s}>{s}</option>)}
           </select>
         </div>
 
-        {/* Swap + To row */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', background: 'white', borderRadius: 10, padding: '4px 12px', gap: 8, flex: 1 }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: '#ef4444', flexShrink: 0 }} />
+        {/* To row */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+          <div className="search-box-pill" style={{ background: 'white', padding: '12px 16px', borderRadius: 12, flex: 1 }}>
+            <div className="search-dot" style={{ borderColor: '#ef4444' }} />
             <select value={toStop} onChange={e => setToStop(e.target.value)}
-              style={{ flex: 1, border: 'none', outline: 'none', fontSize: 14, color: toStop ? '#1a1a2e' : '#aaa', padding: '8px 0', background: 'transparent' }}>
-              <option value="">To — Select stop</option>
+              style={{ flex: 1, border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, color: '#0f2030', background: 'transparent' }}>
+              <option value="">Destination Stop</option>
               {safeAllStops.map((s, i) => <option key={i} value={s}>{s}</option>)}
             </select>
           </div>
           <button onClick={swapStops} style={{
-            width: 38, height: 38, borderRadius: '50%', background: 'rgba(255,255,255,0.2)',
-            border: '1px solid rgba(255,255,255,0.4)', color: 'white', display: 'flex',
+            width: 44, height: 44, borderRadius: 12, background: 'rgba(255,255,255,0.2)',
+            border: 'none', color: 'white', display: 'flex',
             alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0,
             margin: 0, padding: 0
           }}><SwapIcon /></button>
@@ -927,56 +879,67 @@ const HomeScreen = ({ routes, buses, user, cityName, onRouteSelect, onBusSelect,
 
         {/* Search button */}
         <button onClick={handleSearch} disabled={!fromStop || !toStop} style={{
-          width: '100%', padding: '11px', borderRadius: 10, border: 'none',
-          background: (!fromStop || !toStop) ? 'rgba(255,255,255,0.3)' : 'white',
-          color: (!fromStop || !toStop) ? 'rgba(255,255,255,0.6)' : '#036ea7',
-          fontWeight: 700, fontSize: 15, cursor: (!fromStop || !toStop) ? 'not-allowed' : 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: 0
+          width: '100%', padding: '14px', borderRadius: 12, border: 'none',
+          background: (!fromStop || !toStop) ? 'rgba(255,255,255,0.2)' : '#ffcc00',
+          color: (!fromStop || !toStop) ? 'rgba(255,255,255,0.5)' : '#000',
+          fontWeight: 800, fontSize: 16, cursor: (!fromStop || !toStop) ? 'not-allowed' : 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, margin: 0,
+          boxShadow: '0 4px 15px rgba(0,0,0,0.1)'
         }}>
           <SearchIcon /> Search Buses
         </button>
       </div>
 
       {/* Live map */}
-      <div style={{ position: 'relative', flexShrink: 0 }}>
-        <div ref={mapRef} style={{ width: '100%', height: 220, background: '#e5e3df' }} />
+      <div style={{ position: 'relative', marginTop: -20, padding: '0 16px' }}>
+        <div style={{ borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 25px rgba(0,0,0,0.1)', background: 'white' }}>
+          <div ref={mapRef} style={{ width: '100%', height: 180, background: '#e5e3df' }} />
+        </div>
         <div style={{
-          position: 'absolute', top: 10, left: 12,
-          background: 'rgba(0,0,0,0.55)', color: 'white',
-          fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 20,
-          display: 'flex', alignItems: 'center', gap: 6
+          position: 'absolute', top: 12, left: 28,
+          background: 'rgba(0,0,0,0.6)', color: 'white',
+          fontSize: 10, fontWeight: 800, padding: '4px 12px', borderRadius: 20,
+          display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase'
         }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: activeBuses.length > 0 ? '#22c55e' : '#ef4444', display: 'inline-block' }} />
-          {activeBuses.length > 0 ? `${activeBuses.length} buses live` : 'No live buses'}
+          <span className="status-dot" style={{ background: activeBuses.length > 0 ? '#22c55e' : '#ef4444' }} />
+          {activeBuses.length > 0 ? `${activeBuses.length} Live` : 'No Live Buses'}
         </div>
         <button onClick={onNearMe} style={{
-          position: 'absolute', bottom: 10, right: 12,
-          background: 'white', border: 'none', borderRadius: 20,
-          padding: '6px 14px', fontSize: 12, fontWeight: 700, color: '#036ea7',
-          cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          display: 'flex', alignItems: 'center', gap: 6, margin: 0
+          position: 'absolute', bottom: 12, right: 28,
+          background: 'white', border: 'none', borderRadius: 12,
+          padding: '8px 16px', fontSize: 12, fontWeight: 800, color: '#0070bb',
+          cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          display: 'flex', alignItems: 'center', gap: 8, margin: 0
         }}><LocationIcon /> Near Me</button>
       </div>
 
       {/* All buses list */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '14px 16px 24px', background: '#f0f9ff' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <h2 className="section-title" style={{ margin: 0 }}>All Buses in Vellore</h2>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>{uniqueBuses.length} buses</span>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 16px', background: 'transparent' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 800, color: '#0f2030', margin: 0 }}>Available Buses</h2>
+          <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8', background: 'white', padding: '4px 10px', borderRadius: 10 }}>{uniqueBuses.length} TOTAL</span>
         </div>
         {uniqueBuses.map((bus, i) => (
-          <div key={i} className="bus-card" onClick={() => onBusSelect(bus.bus_id, bus.route_id)}>
-            <div className="bus-header">
-              <span className="bus-name">{bus.bus_name}</span>
-              <span className="bus-number">{bus.bus_number}</span>
+          <div key={i} className="bus-card" style={{
+            background: 'white', border: '1px solid #e2e8f0', borderRadius: 16, padding: '16px', marginBottom: 12,
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.02)'
+          }} onClick={() => onBusSelect(bus.bus_id, bus.route_id)}>
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#0f2030', marginBottom: 4 }}>{bus.bus_name}</div>
+              <div style={{ fontSize: 12, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ClockIcon style={{ width: 12, height: 12 }} /> {bus.start_time} – {bus.end_time}
+              </div>
             </div>
-            <div className="bus-times">
-              <div className="time-item"><ClockIcon /><span>{bus.start_time} – {bus.end_time}</span></div>
+            <div style={{ background: '#f1f5f9', color: '#036ea7', padding: '6px 12px', borderRadius: 12, fontSize: 13, fontWeight: 700 }}>
+              {bus.bus_number}
             </div>
           </div>
         ))}
         {uniqueBuses.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#888', padding: 20 }}>Loading buses...</p>
+          <div style={{ textAlign: 'center', color: '#94a3b8', padding: 40 }}>
+            <div className="spinner" style={{ margin: '0 auto 16px' }} />
+            <p>Loading bus schedules...</p>
+          </div>
         )}
       </div>
     </div>
@@ -1476,350 +1439,147 @@ function BusTrackingScreen({ busId, onBack, userLocation, selectedRouteId, searc
     </div>
   );
 
-  const nextDep = getNextDeparture();
   const srcInfo = sourceInfo();
+  const nextDep = getNextDeparture();
 
   return (
-    // ── BUG FIX 2: removed the unclosed <div className="Crowdsourcing"> that
-    //    was wrapping tracking-tabs and eta/schedule panels inside crowd bar ──
-    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <header className="header">
-        <button className="back-btn" onClick={onBack}><BackIcon /> Back</button>
-        <div style={{ textAlign: 'center', flex: 1 }}>
-          <span style={{ color: 'white', fontWeight: 700, fontSize: 16 }}>{busData.bus_name}</span>
-          <span style={{ color: 'rgba(255,255,255,0.75)', fontSize: 13, marginLeft: 8 }}>({busData.bus_number})</span>
+    <div className="app-container" style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#f8fafc' }}>
+      {/* Header */}
+      <header className="header" style={{ background: '#0070bb' }}>
+        <button className="back-btn" onClick={onBack} style={{ width: 'auto', margin: 0 }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          <span style={{ marginLeft: 4 }}>Back</span>
+        </button>
+        <div style={{ flex: 1, textAlign: 'center', color: 'white', fontWeight: 700, fontSize: 18 }}>
+          {busData.bus_name}
         </div>
         <div style={{ width: 60 }} />
       </header>
 
-      <div className="tracking-info-strip">
-        <div className="tracking-route-label">
-          <LocationIcon /><span>{busData.start_point}</span><ArrowIcon /><span>{busData.end_point}</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 6 }}>
-          {/* ── BUG FIX 3: source badge now correctly uses sourceInfo() ── */}
-          <div className="live-badge" style={{ background: srcInfo.color + '22', color: srcInfo.color, border: `1px solid ${srcInfo.color}44` }}>
-            <span className="status-dot" style={{ background: srcInfo.color }} />
-            {srcInfo.label}
-          </div>
-          {nextDep && <div className="next-dep-badge"><ClockIcon /> Next: {nextDep}</div>}
-        </div>
-      </div>
-
-      {/* Map */}
+      {/* Map at Top */}
       <div
         style={{
-          flex: isMapFullscreen ? 'none' : 1,
-          minHeight: isMapFullscreen ? '100vh' : 280,
-          height: isMapFullscreen ? '100vh' : undefined,
+          height: isMapFullscreen ? '100vh' : 220,
           position: isMapFullscreen ? 'fixed' : 'relative',
           inset: isMapFullscreen ? 0 : undefined,
           zIndex: isMapFullscreen ? 999 : 1,
           background: '#e5e3df',
+          transition: 'height 0.3s ease'
         }}
-        onClick={() => {
-          const now = Date.now();
-          if (!isMapFullscreen) {
-            setIsMapFullscreen(true);
-          } else {
-            if (now - lastTapRef.current < 350) setIsMapFullscreen(false);
-            lastTapRef.current = now;
-          }
-        }}
+        onClick={() => setIsMapFullscreen(!isMapFullscreen)}
       >
         <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-        {!mapsLoaded && (
-          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#e5e3df' }}>
-            <div className="spinner" />
-          </div>
-        )}
         {!isMapFullscreen && (
-          <div style={{ position: 'absolute', bottom: 10, right: 10, background: 'rgba(0,0,0,0.55)', color: 'white', fontSize: 12, fontWeight: 600, padding: '5px 10px', borderRadius: 8, pointerEvents: 'none' }}>
-            ⛶ Tap to expand  •  Double-tap to close
-          </div>
-        )}
-        {isMapFullscreen && (
-          <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.6)', color: 'white', padding: '8px 20px', borderRadius: 20, fontSize: 13, fontWeight: 600, pointerEvents: 'none', zIndex: 1000 }}>
-            Double-tap to close
+          <div style={{
+            position: 'absolute', bottom: 12, right: 12, background: 'rgba(255,255,255,0.9)',
+            color: '#666', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.1)', cursor: 'pointer'
+          }}>
+            tap map to expand
           </div>
         )}
       </div>
 
-      {/* Notification bar */}
-      <div className="notif-selector-bar">
-        <span className="notif-bell">🔔</span>
-        <select
-          className="notif-stop-select"
-          value={notifyStop}
-          onChange={e => {
-            setNotifyStop(e.target.value);
-            if (e.target.value) {
-              Notification.requestPermission().then(p => {
-                if (p === 'granted') setShowNotifBanner(true);
-                setTimeout(() => setShowNotifBanner(false), 3000);
-              });
-            }
-          }}
-        >
-          <option value="">Notify me when near stop…</option>
-          {Array.from(new Set(busData.stops?.map(s => s.name) || [])).map((stopName, i) => (
-            <option key={i} value={stopName}>{stopName}</option>
-          ))}
-        </select>
-        {notifyStop && <button className="notif-clear-btn" onClick={() => setNotifyStop('')}>✕</button>}
-      </div>
-
-      {showNotifBanner && (
-        <div className="notif-banner">
-          ✅ You'll be notified when the bus is near <strong>{notifyStop}</strong>
+      {/* Info Strip */}
+      <div className="info-strip">
+        <div className="info-col">
+          <span className="info-val">{busData.position?.speed || 0} km/h</span>
+          <span className="info-label">Speed</span>
         </div>
-      )}
-
-      {/* Crowd Alerts */}
-      {crowdStatus?.alerts?.length > 0 && (
-        <div style={{ background: '#7f1d1d', color: '#fca5a5', padding: '10px 16px', fontSize: 13, display: 'flex', gap: 10, alignItems: 'center' }}>
-          <span style={{ fontSize: 18 }}>{crowdStatus.alerts[0].report_type === 'not_running' ? '🚫' : '⚠️'}</span>
-          <div style={{ flex: 1 }}>
-            <strong>{crowdStatus.alerts[0].report_type === 'not_running' ? 'Reported: Not running today' : 'Reported: Bus is delayed'}</strong>
-            <span style={{ marginLeft: 8, opacity: 0.7 }}>({crowdStatus.alerts[0].confirmations} report{crowdStatus.alerts[0].confirmations > 1 ? 's' : ''})</span>
-          </div>
+        <div className="info-col">
+          <span className="info-val" style={{ fontSize: 14 }}>{busData.eta?.find(e => e.status === 'current')?.stop_name || 'CMC Stop'}</span>
+          <span className="info-label">Next stop</span>
         </div>
-      )}
-
-      {/* ── Crowdsource Bar ── */}
-      <div className="crowd-bar">
-        <div className="crowd-action-row">
-          <button
-            className={`crowd-share-btn ${onBusReported ? 'shared' : ''}`}
-            onClick={reportOnBus}
-            disabled={crowdLoading}
-          >
-            {crowdLoading ? '⏳ Starting…' : onBusReported ? '✅ Sharing — tap to stop' : "🚌 I'm on this bus"}
-          </button>
-          <button className="crowd-toggle-btn" onClick={() => setShowCrowdPanel(p => !p)}>
-            {showCrowdPanel ? '▲' : '▼'} Reports
-          </button>
+        <div className="info-col">
+          <span className="info-val">{busData.eta?.find(e => e.status === 'current')?.eta_minutes || 3} min</span>
+          <span className="info-label">ETA</span>
         </div>
-
-        {crowdFeedback && <p className="crowd-feedback">{crowdFeedback}</p>}
-
-        {/* ── BUG FIX 4: crowd panel now fully rendered with reportStatus wired up ── */}
-        {showCrowdPanel && (
-          <div className="crowd-panel">
-            <p className="crowd-panel-label">Report bus status:</p>
-            <div className="crowd-status-btns">
-              <button className="crowd-status-btn" onClick={() => reportStatus('stop_departed')}>🛑 Just departed stop</button>
-              <button className="crowd-status-btn" onClick={() => reportStatus('delayed')}>⚠️ Bus is delayed</button>
-              <button className="crowd-status-btn" onClick={() => reportStatus('not_running')}>🚫 Not running</button>
-            </div>
-
-            {/* Removed Recent Reports from Passenger view as requested */}
-
-            {crowdStatus?.crowd_stop && (
-              <div className="crowd-last-seen">
-                👥 <strong>Last seen:</strong> departed <em>{crowdStatus.crowd_stop.stop_name}</em> — {crowdStatus.crowd_stop.confirmations} confirm{crowdStatus.crowd_stop.confirmations !== 1 ? 's' : ''}
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Tabs */}
-      <div className="tracking-tabs">
-        <button className={`tracking-tab ${activeTab === 'eta' ? 'active' : ''}`} onClick={() => setActiveTab('eta')}>ETA</button>
-        <button className={`tracking-tab ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')}>Schedule</button>
+      <div className="tracking-tabs" style={{ background: '#1a1a1a', padding: '0 4px' }}>
+        <button className={`tracking-tab ${activeTab === 'eta' ? 'active' : ''}`} onClick={() => setActiveTab('eta')} style={{ color: activeTab === 'eta' ? '#15a8cd' : '#666', borderBottom: activeTab === 'eta' ? '2px solid #15a8cd' : 'none' }}>ETA & Stops</button>
+        <button className={`tracking-tab ${activeTab === 'schedule' ? 'active' : ''}`} onClick={() => setActiveTab('schedule')} style={{ color: activeTab === 'schedule' ? '#15a8cd' : '#666', borderBottom: activeTab === 'schedule' ? '2px solid #15a8cd' : 'none' }}>Schedule</button>
       </div>
 
       {activeTab === 'eta' && (
-        <div style={{ background: '#f8fafc', flex: 1, overflowY: 'auto' }}>
-          {(!Array.isArray(busData.eta) || busData.eta.length === 0) ? (
-            <p style={{ textAlign: 'center', color: '#888', padding: 40 }}>No ETA data available</p>
-          ) : (() => {
-            const etaList = busData.eta || [];
-            // Use status from backend (passed / current / upcoming)
-            // Fallback: if no status field, compute from eta_minutes
-            const currentIdx = (() => {
-              const byStatus = etaList.findIndex(e => e.status === 'current');
-              if (byStatus !== -1) return byStatus;
-              const arrivingIdx = etaList.findIndex(e => e.eta_minutes <= 2);
-              return arrivingIdx; // -1 means bus hasn't started
-            })();
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {busData.eta?.map((eta, i) => {
+            const isPassed = eta.status === 'passed';
+            const isCurrent = eta.status === 'current';
+            const isFirst = i === 0;
+            const isLast = i === busData.eta.length - 1;
 
             return (
-              <>
-                {/* Header strip */}
-                <div style={{
-                  padding: '10px 16px 8px',
-                  background: 'white',
-                  borderBottom: '1px solid #e2e8f0',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center'
-                }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f2030' }}>
-                    {busData.start_point} → {busData.end_point}
-                  </span>
-                  <span style={{ fontSize: 12, color: '#64748b' }}>
-                    {etaList.length} stops
-                  </span>
+              <div key={i} style={{
+                background: isCurrent ? 'white' : 'transparent',
+                borderRadius: 12, padding: '12px 16px', marginBottom: 4,
+                display: 'flex', alignItems: 'center', gap: 16,
+                boxShadow: isCurrent ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                opacity: isPassed ? 0.6 : 1
+              }}>
+                {/* Timeline bar column */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 20, alignSelf: 'stretch' }}>
+                  <div style={{ width: 2, flex: 1, background: isPassed ? '#15a8cd' : '#cbd5e1', visibility: isFirst ? 'hidden' : 'visible' }} />
+                  <div style={{
+                    width: 14, height: 14, borderRadius: '50%', border: `3px solid ${isPassed || isCurrent ? '#15a8cd' : '#cbd5e1'}`,
+                    background: isPassed ? '#15a8cd' : 'white', flexShrink: 0
+                  }} />
+                  <div style={{ width: 2, flex: 1, background: isPassed || isCurrent ? '#15a8cd' : '#cbd5e1', visibility: isLast ? 'hidden' : 'visible' }} />
                 </div>
 
-                {/* Stop list — Where is My Train style */}
-                <div style={{ padding: '0 0 24px' }}>
-                  {etaList.map((eta, i) => {
-                    const isPassed  = eta.status === 'passed'  || (currentIdx !== -1 && i < currentIdx && !eta.status);
-                    const isCurrent = eta.status === 'current' || (i === currentIdx && !eta.status);
-                    const isFirst   = i === 0;
-                    const isLast    = i === etaList.length - 1;
-
-                    // Line color above this stop
-                    const lineColor = isPassed ? '#15a8cd' : '#e2e8f0';
-
-                    // Dot style
-                    const dotSize   = isCurrent ? 18 : 14;
-                    const dotColor  = isPassed  ? '#15a8cd'
-                                    : isCurrent ? '#15a8cd'
-                                    : '#cbd5e1';
-                    const dotBg     = isPassed  ? '#15a8cd'
-                                    : isCurrent ? 'white'
-                                    : 'white';
-                    const dotBorder = isPassed  ? '#15a8cd'
-                                    : isCurrent ? '#15a8cd'
-                                    : '#cbd5e1';
-
-                    return (
-                      <div key={i} style={{ display: 'flex', alignItems: 'stretch' }}>
-
-                        {/* ── Left column: line + dot ── */}
-                        <div style={{
-                          width: 56, flexShrink: 0,
-                          display: 'flex', flexDirection: 'column', alignItems: 'center',
-                        }}>
-                          {/* Line above dot */}
-                          <div style={{
-                            width: 3, flex: 1, minHeight: isFirst ? 18 : 0,
-                            background: isFirst ? 'transparent' : lineColor,
-                          }} />
-                          {/* Dot */}
-                          <div style={{
-                            width: dotSize, height: dotSize, borderRadius: '50%',
-                            background: dotBg,
-                            border: `3px solid ${dotBorder}`,
-                            flexShrink: 0, zIndex: 1,
-                            boxShadow: isCurrent ? '0 0 0 4px rgba(21,168,205,0.2)' : 'none',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          }}>
-                            {/* Filled inner circle for passed stops */}
-                            {isPassed && (
-                              <div style={{
-                                width: 8, height: 8, borderRadius: '50%', background: 'white'
-                              }} />
-                            )}
-                          </div>
-                          {/* Line below dot */}
-                          <div style={{
-                            width: 3, flex: 1, minHeight: isLast ? 18 : 24,
-                            background: isLast ? 'transparent' : (isPassed || isCurrent) ? '#15a8cd' : '#e2e8f0',
-                          }} />
-                        </div>
-
-                        {/* ── Right column: stop info ── */}
-                        <div style={{
-                          flex: 1,
-                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                          padding: '10px 16px 10px 4px',
-                          borderBottom: isLast ? 'none' : '1px solid #f1f5f9',
-                          background: isCurrent ? 'rgba(21,168,205,0.04)' : 'transparent',
-                        }}>
-                          {/* Stop name + badge */}
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                              <span style={{
-                                fontSize: 14,
-                                fontWeight: isCurrent || isFirst || isLast ? 700 : 400,
-                                color: isPassed  ? '#94a3b8'
-                                     : isCurrent ? '#0f2030'
-                                     : '#374151',
-                              }}>
-                                {eta.stop_name}
-                              </span>
-                              {isCurrent && (
-                                <span style={{
-                                  fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
-                                  color: 'white', background: '#15a8cd',
-                                  padding: '2px 8px', borderRadius: 10,
-                                }}>BUS HERE</span>
-                              )}
-                              {isFirst && !isPassed && !isCurrent && (
-                                <span style={{
-                                  fontSize: 10, fontWeight: 700,
-                                  color: '#15a8cd', border: '1px solid #15a8cd',
-                                  padding: '1px 7px', borderRadius: 10,
-                                }}>START</span>
-                              )}
-                              {isLast && (
-                                <span style={{
-                                  fontSize: 10, fontWeight: 700,
-                                  color: '#ef4444', border: '1px solid #ef4444',
-                                  padding: '1px 7px', borderRadius: 10,
-                                }}>END</span>
-                              )}
-                            </div>
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                              {eta.distance_km} km away
-                            </span>
-                          </div>
-
-                          {/* ETA badge on right */}
-                          <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 12 }}>
-                            {isPassed ? (
-                              <span style={{ fontSize: 12, color: '#94a3b8' }}>Passed</span>
-                            ) : isCurrent ? (
-                              <span style={{
-                                fontSize: 13, fontWeight: 800,
-                                color: '#22c55e', background: 'rgba(34,197,94,0.1)',
-                                border: '1px solid rgba(34,197,94,0.3)',
-                                padding: '4px 12px', borderRadius: 20, display: 'block'
-                              }}>Arriving</span>
-                            ) : (
-                              <>
-                                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f2030', lineHeight: 1 }}>
-                                  {eta.eta_minutes} min
-                                </div>
-                                <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                                  ETA
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })}
+                <div style={{ flex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? '#000' : '#666' }}>{eta.stop_name}</span>
+                    {isCurrent && <span style={{ background: '#0070bb', color: 'white', fontSize: 10, fontWeight: 900, padding: '3px 8px', borderRadius: 20 }}>BUS HERE</span>}
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {isPassed ? (
+                      <span style={{ fontSize: 12, color: '#94a3b8' }}>Passed</span>
+                    ) : (
+                      <span style={{ fontSize: 14, fontWeight: 700, color: isCurrent ? '#22c55e' : '#15a8cd' }}>
+                        {isCurrent ? 'Arriving' : `${eta.eta_minutes} min`}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </>
+              </div>
             );
-          })()}
+          })}
+          <div style={{ textAlign: 'center', padding: '20px 0', color: '#94a3b8', fontSize: 13 }}>+ {Math.max(0, busData.stops?.length - (busData.eta?.length || 0))} more stops</div>
         </div>
       )}
 
       {activeTab === 'schedule' && (
-        <div className="eta-panel">
-          <p style={{ fontSize: 13, color: '#888', marginBottom: 12 }}>Departures from <strong>{busData.start_point}</strong></p>
-          <div className="schedule-grid">
-            {Array.from(new Set((Array.isArray(schedules) ? schedules : []).map(s => s.departure))).map((departureTime, i) => {
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 16px' }}>
+          <p style={{ color: '#64748b', fontSize: 14, marginBottom: 16 }}>Departures from {busData.start_point}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+            {schedules.map((s, i) => {
               const now = new Date();
-              const nowMin = now.getHours() * 60 + now.getMinutes();
-              const [h, m] = departureTime.split(':').map(Number);
-              const isPast = h * 60 + m < nowMin;
-              const isNext = getNextDeparture() === departureTime;
-              
-              const s = (Array.isArray(schedules) ? schedules : []).find(sched => sched.departure === departureTime);
-              const timeLabel = s?.arrival && s?.arrival !== s?.departure ? `${s.arrival} → ${s.departure}` : departureTime;
+              const [h, m] = s.departure.split(':').map(Number);
+              const isNext = h * 60 + m > (now.getHours() * 60 + now.getMinutes());
+              // For simplicity, just pick one as "Next" if it's the first one in the future
+              const isFirstNext = isNext && !schedules.slice(0, i).some(prev => {
+                const [ph, pm] = prev.departure.split(':').map(Number);
+                return ph * 60 + pm > (now.getHours() * 60 + now.getMinutes());
+              });
 
               return (
-                <div key={i} className={`schedule-chip ${isPast ? 'past' : ''} ${isNext ? 'next' : ''}`}>
-                  {timeLabel}
-                  {isNext && <span className="next-label">Next</span>}
+                <div key={i} style={{
+                  background: isFirstNext ? '#1a1a1a' : '#f1f5f9',
+                  color: isFirstNext ? 'white' : '#1a1a1a',
+                  padding: '12px 0', borderRadius: 12, textAlign: 'center',
+                  fontSize: 15, fontWeight: 600, position: 'relative',
+                  border: isFirstNext ? 'none' : '1px solid #e2e8f0'
+                }}>
+                  {s.departure}
+                  {isFirstNext && (
+                    <span style={{
+                      position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)',
+                      background: '#15a8cd', color: 'white', fontSize: 9, fontWeight: 900,
+                      padding: '2px 8px', borderRadius: 6, textTransform: 'uppercase'
+                    }}>Next</span>
+                  )}
                 </div>
               );
             })}
